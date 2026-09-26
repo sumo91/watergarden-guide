@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#133f3c" />
+    <meta
+      name="description"
+      content="驾驶一叶小舟，鸣铃引鱼，让沉睡的水庭重新亮起。支持手机触控的免费 3D 网页小游戏。"
+    />
+    <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+    <title>水庭引路人 · The Watergarden</title>
+  </head>
+  <body data-mode="loading">
+    <canvas
+      id="scene"
+      aria-label="水庭游戏画面，点击水面划船，也可使用方向键"
+    ></canvas>
+    <div id="loading" class="veil">
+      <div class="loading-ripple">≈</div>
+      <p>让水庭慢慢醒来</p>
+      <span id="loading-status">正在准备小船与灵鱼…</span>
+    </div>
+    <main id="ui">
+      <header class="topbar">
+        <a class="wordmark" href="./" aria-label="水庭引路人首页"
+          ><span class="mark">≈</span
+          ><span>水庭引路人<small>THE WATERGARDEN</small></span></a
+        >
+        <div class="tools">
+          <button
+            id="sound"
+            class="icon-button"
+            aria-label="关闭声音"
+            title="声音"
+          >
+            ♫</button
+          ><button
+            id="pause"
+            class="icon-button"
+            aria-label="暂停游戏"
+            title="暂停 · Esc"
+          >
+            Ⅱ
+          </button>
+        </div>
+      </header>
+      <section
+        id="title-screen"
+        class="screen title-screen"
+        hidden
+        aria-label="游戏开始"
+      >
+        <div class="title-content">
+          <p class="eyebrow"><span></span> A LITTLE JOURNEY HOME</p>
+          <h1>把迷路的光，<br />带回水庭。</h1>
+          <p class="intro">
+            一叶小舟，一声轻铃。<br />沿着青绿的水道，护送三群灵鱼归家。
+          </p>
+          <div class="title-actions">
+            <button id="start" class="primary">开启旅程 <span>↗</span></button
+            ><button id="continue" class="secondary" hidden>
+              继续上次的旅程
+            </button>
+          </div>
+          <div class="title-notes">
+            <span>约 5 分钟的宁静</span><i></i><span>耳机体验更佳</span><i></i
+            ><span>手机也能玩</span>
+          </div>
+        </div>
+        <div class="title-number">
+          01 — 03<span>三盏灯 · 一座重新醒来的水庭</span>
+        </div>
+      </section>
+      <section id="hud" hidden aria-label="游戏状态">
+        <div class="quest-card">
+          <div class="quest-top">
+            <span id="chapter">第一程 · 码头的晨光</span>
+            <div id="lanterns" aria-label="已点亮 0 盏灯">
+              <i></i><i></i><i></i>
+            </div>
+          </div>
+          <h2 id="objective">寻找灵鱼</h2>
+          <p id="task-detail">靠近金色鱼群，鸣铃呼唤。</p>
+          <div class="fish-meter">
+            <span id="fish-count">随行 0 / 24</span
+            ><span id="journey-time">00:00</span>
+          </div>
+          <div class="progress-track"><span id="fish-progress"></span></div>
+        </div>
+        <canvas
+          id="minimap"
+          width="160"
+          height="224"
+          aria-label="水庭地图：圆点是小船，菱形是目的地"
+        ></canvas>
+        <div id="waypoint" aria-hidden="true">
+          <span class="waypoint-glyph">◇</span
+          ><span id="waypoint-text">灵鱼</span>
+        </div>
+        <div class="bottom-hint" id="travel-hint">
+          点击水面 / WASD 划船 <span>·</span> 空格鸣铃 <span>·</span> Shift 慢行
+        </div>
+        <div id="joystick" role="group" aria-label="拖动摇杆划船">
+          <div class="stick-cross"></div>
+          <div id="stick"></div>
+          <span>划船</span>
+        </div>
+        <div class="bell-wrap">
+          <div id="current-warning" hidden>≈ 急流 · 放慢速度</div>
+          <button id="bell" aria-label="鸣铃呼唤灵鱼">
+            <svg viewBox="0 0 48 48" fill="none" aria-hidden="true">
+              <path d="M14 29h20c-4-4-4-7-4-11a6 6 0 0 0-12 0c0 4 0 7-4 11Z" />
+              <path
+                d="M21 34c1 3 5 3 6 0M24 9V6M8 20c0-5 2-9 5-12m27 12c0-5-2-9-5-12"
+              /></svg
+            ><span>鸣铃</span></button
+          ><span class="bell-caption">让灵鱼听见你</span>
+        </div>
+      </section>
+      <section id="intro-screen" class="overlay" hidden aria-label="出发说明">
+        <div class="paper intro-paper">
+          <p class="eyebrow">来自河畔的小纸条</p>
+          <h2>水庭很久没有亮过了。</h2>
+          <p>
+            三群灵鱼迷失在水道里。<br />请摇响这枚铜铃，带它们回到石环围成的灯池。
+          </p>
+          <div class="instruction-grid">
+            <div>
+              <b>01</b><strong>划船靠近</strong><span>拖动摇杆或点击水面</span>
+            </div>
+            <div>
+              <b>02</b><strong>鸣铃引鱼</strong><span>靠近后按鸣铃 / 空格</span>
+            </div>
+            <div>
+              <b>03</b><strong>慢慢归家</strong><span>每池至少护送 18 尾</span>
+            </div>
+          </div>
+          <p class="gentle-note">
+            急转弯和水流会让灵鱼掉队。停一停，再鸣铃。<br />跟随画面中的菱形标记，就能找到方向。
+          </p>
+          <button id="sail" class="primary">
+            带上铜铃，出发 <span>→</span>
+          </button>
+        </div>
+      </section>
+      <section id="pause-screen" class="overlay" hidden aria-label="暂停菜单">
+        <div class="paper pause-paper">
+          <p class="eyebrow">TAKE A BREATH</p>
+          <h2>在水边歇一会儿。</h2>
+          <p>旅程已暂停，进度会保存在这台设备。</p>
+          <button id="resume" class="primary">继续划船 <span>→</span></button
+          ><label class="quality-label" for="quality"
+            >画面品质<select id="quality">
+              <option value="auto">自动适配</option>
+              <option value="low">省电 · 更流畅</option>
+              <option value="balanced">均衡</option>
+              <option value="high">精细</option>
+            </select></label
+          >
+          <p class="small-note">更换画质会重新载入，并保留当前旅程。</p>
+          <button id="back-title" class="text-button">回到标题</button>
+        </div>
+      </section>
+      <section
+        id="ending-screen"
+        class="overlay ending-overlay"
+        hidden
+        aria-label="旅程结算"
+      >
+        <div class="paper ending-paper">
+          <div class="ending-lights">✦ <span>✦</span> ✦</div>
+          <p class="eyebrow">ALL LIGHT FINDS ITS WAY HOME</p>
+          <h2>水庭，醒来了。</h2>
+          <p>灯火照见了归来的鱼群。<br />而风会记得，那个摇铃的人。</p>
+          <div class="results">
+            <div>
+              <strong id="result-fish">72</strong><span>归来的灵鱼 / 72</span>
+            </div>
+            <div>
+              <strong id="result-time">05:00</strong><span>这一程的时光</span>
+            </div>
+            <div>
+              <strong id="result-title">引光人</strong><span>你的水庭称号</span>
+            </div>
+          </div>
+          <p id="best-record" class="small-note"></p>
+          <div class="ending-actions">
+            <button id="explore" class="primary">留在水庭 <span>≈</span></button
+            ><button id="replay" class="secondary">再走一程</button>
+          </div>
+        </div>
+      </section>
+      <div id="chapter-message" hidden>
+        <span id="chapter-symbol">✦</span>
+        <p id="chapter-story"></p>
+      </div>
+      <div id="toast" role="status" aria-live="polite"></div>
+      <div id="fatal" class="overlay" hidden>
+        <div class="paper">
+          <h2>水面暂时停住了。</h2>
+          <p id="fatal-message">请尝试重新打开页面。</p>
+          <button class="primary" id="reload">重新进入水庭</button>
+        </div>
+      </div>
+    </main>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

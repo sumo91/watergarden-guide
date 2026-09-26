@@ -1,0 +1,10 @@
+node_modules/
+dist/
+*.log
+.DS_Store
+.iterations/
+captures/
+public/reference*.png
+.env
+.env.*
+!.env.example
