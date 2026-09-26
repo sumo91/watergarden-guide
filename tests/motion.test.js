@@ -20,6 +20,68 @@ const poses = (root) => {
   return result;
 };
 
+test("forearms stay outside the chest and head while rowing, starting and stopping", () => {
+  const traveller = makeTraveller(new THREE.Scene());
+  const chest = traveller.root.getObjectByName("Rowing chest");
+  const point = new THREE.Vector3(),
+    head = new THREE.Vector3();
+  const craft = boat();
+  for (let i = 0; i <= 2400; i++) {
+    const time = i / 120;
+    craft.vz =
+      time < 5 ? -2.9 : time < 8 ? 0 : time < 13 ? -1.45 : time < 16 ? 0 : -2.9;
+    traveller.update(time, craft);
+    traveller.root.getObjectByName("Rowing head").getWorldPosition(head);
+    for (const side of ["Left", "Right"]) {
+      const arm = traveller.root.getObjectByName(`${side} forearm`);
+      for (let sample = 0; sample <= 10; sample++) {
+        point.set(0, sample / 10 - 0.5, 0).applyMatrix4(arm.matrixWorld);
+        assert.ok(
+          point.distanceTo(head) > 0.165,
+          `${side} forearm intersects the head at frame ${i}`,
+        );
+        chest.worldToLocal(point);
+        if (Math.abs(point.y) > 0.205) continue;
+        const radius = THREE.MathUtils.lerp(
+          0.17,
+          0.125,
+          (point.y + 0.205) / 0.41,
+        );
+        assert.ok(
+          Math.hypot(point.x, point.z) > radius + 0.02,
+          `${side} forearm crosses the chest at frame ${i}`,
+        );
+      }
+    }
+  }
+});
+
+test("elbows do not snap when starting, stopping or changing rowing speed", () => {
+  const traveller = makeTraveller(new THREE.Scene());
+  const craft = boat();
+  const previous = new Map();
+  const elbow = new THREE.Vector3();
+  for (let i = 0; i <= 2400; i++) {
+    const time = i / 120;
+    craft.vz =
+      time < 5 ? -2.9 : time < 8 ? 0 : time < 13 ? -1.45 : time < 16 ? 0 : -2.9;
+    traveller.update(time, craft);
+    for (const side of ["Left", "Right"]) {
+      const upper = traveller.root.getObjectByName(`${side} upper arm`);
+      elbow
+        .set(0, upper.scale.y / 2, 0)
+        .applyQuaternion(upper.quaternion)
+        .add(upper.position);
+      if (previous.has(side))
+        assert.ok(
+          elbow.distanceTo(previous.get(side)) < 0.025,
+          `${side} elbow snapped at frame ${i}`,
+        );
+      previous.set(side, elbow.clone());
+    }
+  }
+});
+
 test("the paddle stays rigid throughout a rowing cycle", () => {
   const traveller = makeTraveller(new THREE.Scene());
   const shaft = traveller.root.getObjectByName("Paddle shaft");

@@ -883,6 +883,7 @@ export function makeTraveller(scene) {
     0,
   );
   body.rotation.x = -0.22;
+  body.name = "Rowing chest";
   const head = new THREE.Group();
   head.name = "Rowing head";
   head.position.set(0, 0.455, -0.08);
@@ -936,6 +937,7 @@ export function makeTraveller(scene) {
   let previousTime,
     previousAngle,
     speed = 0,
+    effort = 0,
     turn = 0,
     phase = 0;
   return {
@@ -949,7 +951,11 @@ export function makeTraveller(scene) {
       previousTime = t;
       const velocity = boat && rowing ? Math.hypot(boat.vx, boat.vz) : 0;
       speed += (velocity - speed) * (1 - Math.exp(-dt * 5));
-      const effort = THREE.MathUtils.smoothstep(speed, 0.08, 1.4);
+      const targetEffort = THREE.MathUtils.smoothstep(speed, 0.08, 1.4);
+      // Settling the arms takes longer than accelerating the hull. Without this
+      // blend the resting grip snaps into the stroke during the first few frames.
+      effort += (targetEffort - effort) * (1 - Math.exp(-dt * 3));
+      if (targetEffort === 0 && effort < 0.001) effort = 0;
       phase += dt * Math.PI * 2 * (0.44 + Math.min(speed, 3) * 0.075);
       const cycle = (phase / (Math.PI * 2)) % 1;
       const stroke = paddlePose(cycle, effort, tip, grip);

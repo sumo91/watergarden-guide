@@ -8,12 +8,12 @@ export const HAND_SPACING = 0.38;
 // Ready, catch, power, exit, feathered recovery, then ready again.
 // Positions describe the blade centre in boat space; the shaft never stretches.
 const strokes = [
-  [0, 0.76, 0.12, -0.25, 1],
+  [0, 0.82, 0.08, -0.25, 1],
   [0.1, 0.55, -0.075, -0.25, 0],
   [0.57, 0.55, -0.075, 0.58, 0],
   [0.7, 0.96, 0.18, 0.66, 1],
   [0.86, 1.1, 0.29, 0.08, 1],
-  [1, 0.76, 0.12, -0.25, 1],
+  [1, 0.82, 0.08, -0.25, 1],
 ];
 
 export function paddlePose(cycle, effort, tip, grip) {
@@ -29,11 +29,13 @@ export function paddlePose(cycle, effort, tip, grip) {
   );
   const feather = THREE.MathUtils.lerp(a[4], b[4], ease);
   const reach = THREE.MathUtils.clamp((tip.z + 0.25) / 0.91, 0, 1);
-  grip.set(0.22, 0, THREE.MathUtils.lerp(0.14, 0.06 + reach * 0.16, effort));
+  // Keep the top grip forward of the chest; bringing it beside the neck
+  // makes the crossing forearm pass through the chin even with a valid elbow.
+  grip.set(0.22, 0, THREE.MathUtils.lerp(-0.06, -0.14 + reach * 0.14, effort));
   tip.set(
-    THREE.MathUtils.lerp(0.55, tip.x, effort),
-    THREE.MathUtils.lerp(0.3, tip.y, effort),
-    THREE.MathUtils.lerp(1.02, tip.z, effort),
+    THREE.MathUtils.lerp(0.9, tip.x, effort),
+    THREE.MathUtils.lerp(0.25, tip.y, effort),
+    THREE.MathUtils.lerp(0.7, tip.z, effort),
   );
   const dx = tip.x - grip.x,
     dz = tip.z - grip.z;
@@ -58,8 +60,9 @@ export function solveElbow(shoulder, hand, side, result) {
   axis.subVectors(hand, shoulder);
   const distance = Math.max(axis.length(), 0.0001);
   axis.divideScalar(distance);
-  // Keep the elbow outside and below the shoulder, without flipping at the catch.
-  bend.set(side * 0.85, -0.55, 0.35);
+  // The elbow bends in front of the chest. A backward pole lets the forearm
+  // cut through the torso when the upper hand reaches across to the paddle.
+  bend.set(side * 0.45, -0.35, -1.4);
   bend.addScaledVector(axis, -bend.dot(axis)).normalize();
   const along = THREE.MathUtils.clamp(
     (UPPER_ARM ** 2 + distance ** 2 - FOREARM ** 2) / (2 * distance),
