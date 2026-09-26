@@ -550,9 +550,9 @@ function frame(now) {
   const zoom = ending ? 0.76 : active ? 1 : 1.03;
   camera.zoom += (zoom - camera.zoom) * (1 - Math.exp(-dt));
   camera.updateProjectionMatrix();
-  traveller.update(art, game.boat);
+  traveller.update(art, game.boat, active);
   wood.update(art);
-  wake.update(art, game.boat);
+  wake.update(art, game.boat, traveller.motion);
   flora.update(art);
   garden.update(game, art);
   artTime.value = art;

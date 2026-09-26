@@ -794,6 +794,7 @@ export function makeTraveller(scene) {
   const root = new THREE.Group();
   scene.add(root);
   root.position.set(-0.5, 0, 1);
+  root.rotation.order = "YXZ";
   root.rotation.y = -0.17;
   // A small ochre skiff, ivory deck, and wind-filled terracotta sail.
   const hull = mesh(
@@ -837,52 +838,178 @@ export function makeTraveller(scene) {
     pants = "#425a62";
   stem(root, [-0.1, 0.24, 0.23], [-0.17, 0.58, 0.3], 0.073, pants);
   stem(root, [0.17, 0.21, 0.04], [0.16, 0.6, 0.22], 0.074, pants);
+  // The hips stay planted while the upper body reaches into each paddle stroke.
+  const torso = new THREE.Group();
+  torso.name = "Rowing torso";
+  torso.position.set(0, 0.6, 0.24);
+  root.add(torso);
   const body = mesh(
     new THREE.CylinderGeometry(0.125, 0.17, 0.41, 6),
     shirt,
-    root,
+    torso,
     0,
-    0.75,
-    0.24,
+    0.15,
+    0,
   );
   body.rotation.x = -0.22;
-  stem(root, [-0.12, 0.89, 0.23], [-0.24, 0.73, -0.09], 0.045, shirt);
-  stem(root, [-0.24, 0.73, -0.09], [-0.19, 0.87, -0.34], 0.035, skin);
-  stem(root, [0.1, 0.9, 0.2], [0.3, 0.69, 0.03], 0.045, shirt);
-  stem(root, [0.3, 0.69, 0.03], [0.39, 0.57, -0.22], 0.031, skin);
-  mesh(new THREE.IcosahedronGeometry(0.133, 1), skin, root, 0, 1.055, 0.16);
+  const head = new THREE.Group();
+  head.position.set(0, 0.455, -0.08);
+  torso.add(head);
+  mesh(new THREE.IcosahedronGeometry(0.133, 1), skin, head);
   const hair = mesh(
     new THREE.SphereGeometry(0.139, 7, 4, 0, Math.PI * 2, 0, Math.PI * 0.67),
     "#443c2e",
-    root,
+    head,
     0,
-    1.087,
-    0.17,
+    0.032,
+    0.01,
   );
   hair.rotation.x = 0.15;
-  stem(root, [0.36, 0.63, -0.25], [0.63, -0.06, 1.04], 0.021, "#ad9260");
-  const paddle = mesh(
-    new THREE.SphereGeometry(1, 6, 3),
-    "#d1b477",
-    root,
-    0.64,
-    -0.03,
-    1.1,
-  );
-  paddle.scale.set(0.12, 0.028, 0.32);
-  const scarf = leaf(root, 0.08, 0.88, 0.65, 0.43, "#729b8d", 0.2);
+  const shaft = stem(root, [0, 0, 0], [0, 1, 0], 0.021, "#ad9260");
+  shaft.name = "Paddle shaft";
+  const paddle = mesh(new THREE.SphereGeometry(1, 6, 3), "#d1b477", root);
+  paddle.name = "Paddle blade";
+  paddle.scale.set(0.13, 0.3, 0.035);
+  const scarf = leaf(torso, 0.08, 0.28, 0.41, 0.43, "#729b8d", 0.2);
   scarf.rotation.z = -0.25;
+  const arms = [-1, 1].map((side) => ({
+    side,
+    upper: stem(root, [0, 0, 0], [0, 1, 0], 0.045, shirt),
+    lower: stem(root, [0, 0, 0], [0, 1, 0], 0.033, skin),
+    hand: mesh(new THREE.IcosahedronGeometry(0.044, 1), skin, root),
+  }));
+  const up = new THREE.Vector3(0, 1, 0),
+    direction = new THREE.Vector3(),
+    grip = new THREE.Vector3(),
+    tip = new THREE.Vector3(),
+    shoulder = new THREE.Vector3(),
+    elbow = new THREE.Vector3(),
+    hand = new THREE.Vector3();
+  function segment(object, a, b) {
+    direction.subVectors(b, a);
+    object.position.copy(a).add(b).multiplyScalar(0.5);
+    object.scale.y = direction.length();
+    object.quaternion.setFromUnitVectors(up, direction.normalize());
+  }
+  const cloth = sail.geometry.attributes.position,
+    clothRest = cloth.array.slice();
+  const motion = { paddle: new THREE.Vector3(), wet: 0, speed: 0 };
+  let previousTime,
+    previousAngle,
+    speed = 0,
+    turn = 0,
+    phase = 0;
   return {
     root,
-    update(t, boat) {
+    motion,
+    update(t, boat, rowing = true) {
+      const dt =
+        previousTime === undefined
+          ? 0
+          : Math.max(0, Math.min(0.05, t - previousTime));
+      previousTime = t;
+      const velocity = boat && rowing ? Math.hypot(boat.vx, boat.vz) : 0;
+      speed += (velocity - speed) * (1 - Math.exp(-dt * 5));
+      const effort = THREE.MathUtils.smoothstep(speed, 0.08, 1.4);
+      phase += dt * (2.7 + Math.min(speed, 3) * 0.65);
+      const cycle = (phase / (Math.PI * 2)) % 1;
+      // A longer submerged pull followed by a quicker lifted recovery.
+      const pulling = cycle < 0.61;
+      const travel = pulling ? cycle / 0.61 : (cycle - 0.61) / 0.39;
+      const eased = travel * travel * (3 - 2 * travel);
+      const reach = pulling
+        ? THREE.MathUtils.lerp(-0.85, 0.95, eased)
+        : THREE.MathUtils.lerp(0.95, -0.85, eased);
+      const lift = pulling
+        ? -0.095
+        : -0.095 + Math.sin(travel * Math.PI) * 0.62;
       root.position.x = boat ? boat.x : -0.5 + Math.sin(t * 0.25) * 0.16;
       if (boat) {
         root.position.z = boat.z;
         root.rotation.y = boat.angle;
+        if (previousAngle !== undefined && dt > 0) {
+          const delta = Math.atan2(
+            Math.sin(boat.angle - previousAngle),
+            Math.cos(boat.angle - previousAngle),
+          );
+          turn +=
+            (THREE.MathUtils.clamp(delta / dt, -2, 2) - turn) *
+            (1 - Math.exp(-dt * 4));
+        }
+        previousAngle = boat.angle;
       }
-      root.position.y = Math.sin(t * 1.7) * 0.025;
-      root.rotation.z = Math.sin(t * 1.4) * 0.025;
-      scarf.rotation.y = 0.2 + Math.sin(t * 2) * 0.18;
+      root.position.y =
+        Math.sin(t * 1.7) * 0.026 + Math.sin(phase * 2 - 0.5) * 0.014 * effort;
+      root.rotation.x =
+        Math.sin(t * 1.2) * 0.016 -
+        speed * 0.012 +
+        Math.cos(phase) * 0.024 * effort;
+      root.rotation.z =
+        Math.sin(t * 1.4) * 0.026 +
+        Math.sin(phase - 0.4) * 0.045 * effort -
+        turn * speed * 0.018;
+      torso.rotation.set(
+        -reach * 0.22 * effort + Math.sin(t * 1.5) * 0.025,
+        -0.12 * effort + reach * 0.12 * effort,
+        -0.035 * effort,
+      );
+      head.rotation.set(
+        -torso.rotation.x * 0.35,
+        -turn * 0.13,
+        -torso.rotation.z * 0.6,
+      );
+      scarf.rotation.y = 0.2 + Math.sin(t * 3.2 - 0.6) * (0.17 + effort * 0.14);
+      scarf.rotation.x = Math.sin(t * 2.6) * 0.13 + effort * 0.18;
+      tip.set(
+        0.67 + (pulling ? 0 : Math.sin(travel * Math.PI) * 0.18) * effort,
+        THREE.MathUtils.lerp(0.24, lift, effort),
+        THREE.MathUtils.lerp(0.72, reach, effort),
+      );
+      grip.set(
+        0.08 + effort * 0.1,
+        1.04 + Math.sin(phase) * 0.06 * effort,
+        0.19 + reach * 0.19 * effort,
+      );
+      segment(shaft, grip, tip);
+      paddle.position.copy(tip);
+      paddle.quaternion.copy(shaft.quaternion);
+      for (const arm of arms) {
+        shoulder
+          .set(arm.side * 0.13, 0.29, 0)
+          .applyEuler(torso.rotation)
+          .add(torso.position);
+        hand.copy(grip).lerp(tip, arm.side < 0 ? 0 : 0.34);
+        elbow.copy(shoulder).add(hand).multiplyScalar(0.5);
+        elbow.x += arm.side * 0.13;
+        elbow.y -= 0.12;
+        elbow.z += 0.07;
+        segment(arm.upper, shoulder, elbow);
+        segment(arm.lower, elbow, hand);
+        arm.hand.position.copy(hand);
+      }
+      // Cloth bends away from its fixed mast instead of rotating as a rigid plate.
+      for (let i = 0; i < cloth.count; i++) {
+        const x = clothRest[i * 3],
+          y = clothRest[i * 3 + 1],
+          z = clothRest[i * 3 + 2];
+        const free =
+          Math.min(1, Math.abs(x + 0.15) / 0.65) *
+          THREE.MathUtils.smoothstep(y, 0.45, 1.1);
+        cloth.setZ(
+          i,
+          z +
+            free *
+              (Math.sin(t * 2.4 + y * 3) * 0.055 +
+                Math.sin(t * 4.3 - y * 4) * 0.025 +
+                effort * 0.055),
+        );
+      }
+      cloth.needsUpdate = true;
+      sail.geometry.computeVertexNormals();
+      root.updateMatrixWorld(true);
+      motion.paddle.copy(tip).applyMatrix4(root.matrixWorld);
+      motion.wet = pulling ? effort * Math.sin(travel * Math.PI) : 0;
+      motion.speed = speed;
     },
   };
 }
