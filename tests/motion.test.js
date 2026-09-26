@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import * as THREE from "three";
 import { makeTraveller } from "../src/world.js";
 import { makeWake } from "../src/water.js";
+import { UPPER_ARM, FOREARM, HAND_SPACING } from "../src/rowing.js";
 
 const boat = () => ({ x: 0, z: 0, angle: 0, vx: 0, vz: -2.5 });
 const poses = (root) => {
@@ -18,6 +19,60 @@ const poses = (root) => {
   });
   return result;
 };
+
+test("the paddle stays rigid throughout a rowing cycle", () => {
+  const traveller = makeTraveller(new THREE.Scene());
+  const shaft = traveller.root.getObjectByName("Paddle shaft");
+  const lengths = [];
+  for (let i = 0; i <= 360; i++) {
+    traveller.update(i / 60, boat());
+    lengths.push(shaft.scale.y);
+  }
+  const variation = Math.max(...lengths) - Math.min(...lengths);
+  assert.ok(
+    variation < 0.001,
+    `Paddle changes length by ${variation.toFixed(3)} metres`,
+  );
+});
+
+test("hands stay on the rigid paddle, arms keep their lengths and feet stay planted", () => {
+  const traveller = makeTraveller(new THREE.Scene());
+  const craft = boat();
+  const get = (name) => traveller.root.getObjectByName(name);
+  const footPositions = [
+    get("Left planted foot").position.clone(),
+    get("Right planted foot").position.clone(),
+  ];
+  const shaft = get("Paddle shaft");
+  const top = new THREE.Vector3(),
+    down = new THREE.Vector3(),
+    lowerGrip = new THREE.Vector3();
+  for (let i = 0; i <= 900; i++) {
+    craft.vz = i < 300 ? -2.5 : i < 450 ? 0 : i < 800 ? -1.45 : 0;
+    traveller.update(i / 60, craft);
+    down.set(0, 1, 0).applyQuaternion(shaft.quaternion);
+    top.copy(shaft.position).addScaledVector(down, -shaft.scale.y / 2);
+    lowerGrip.copy(top).addScaledVector(down, HAND_SPACING);
+    assert.ok(get("Left hand").position.distanceTo(top) < 1e-8);
+    assert.ok(get("Right hand").position.distanceTo(lowerGrip) < 1e-8);
+    const head = traveller.root.worldToLocal(
+      get("Rowing head").getWorldPosition(new THREE.Vector3()),
+    );
+    assert.ok(
+      get("Left hand").position.distanceTo(head) > 0.18,
+      "The upper grip must stay beside the face",
+    );
+    for (const side of ["Left", "Right"]) {
+      assert.ok(Math.abs(get(`${side} upper arm`).scale.y - UPPER_ARM) < 1e-8);
+      assert.ok(
+        Math.abs(get(`${side} forearm`).scale.y - FOREARM) < 1e-8,
+        `${side} forearm stretched at frame ${i}`,
+      );
+    }
+    assert.deepEqual(get("Left planted foot").position, footPositions[0]);
+    assert.deepEqual(get("Right planted foot").position, footPositions[1]);
+  }
+});
 
 test("rowing moves the character and paddle relative to the hull", () => {
   const traveller = makeTraveller(new THREE.Scene());

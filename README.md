@@ -55,6 +55,7 @@ pnpm preview --port 5200
 | `src/input.js`                                       | 多点触控摇杆、键盘、点击移动                     |
 | `src/main.js`                                        | 镜头、界面、渲染、存档与画质管理                 |
 | `src/audio.js`                                       | Web Audio 合成铜铃与通关和弦                     |
+| `src/rowing.js`                                      | 固定桨长、握点、双骨骼手臂与四阶段划桨动作       |
 | `src/world.js`, `src/flora.js`, `src/hut.js`         | 程序化地形、道具、植物、小屋                     |
 | `src/water*.js`, `src/materials.js`, `src/finish.js` | 水面、材质、深度扩散与调色                       |
 | `tests/game.test.js`                                 | 边界、掉队找回、存档、任务结算和完整护送路线测试 |

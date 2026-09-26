@@ -2,6 +2,12 @@ import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import {
+  paddlePose,
+  solveElbow,
+  PADDLE_LENGTH,
+  HAND_SPACING,
+} from "./rowing.js";
+import {
   makePainterMaterial,
   surfaceKind,
   softenRockNormals,
@@ -836,8 +842,33 @@ export function makeTraveller(scene) {
   const skin = "#d8b287",
     shirt = "#d7dfc8",
     pants = "#425a62";
-  stem(root, [-0.1, 0.24, 0.23], [-0.17, 0.58, 0.3], 0.073, pants);
-  stem(root, [0.17, 0.21, 0.04], [0.16, 0.6, 0.22], 0.074, pants);
+  for (const side of [-1, 1]) {
+    const z = side < 0 ? 0.36 : 0.06;
+    stem(
+      root,
+      [side * 0.11, 0.59, 0.24],
+      [side * 0.14, 0.39, z - 0.09],
+      0.071,
+      pants,
+    );
+    stem(
+      root,
+      [side * 0.14, 0.39, z - 0.09],
+      [side * 0.15, 0.235, z],
+      0.058,
+      pants,
+    );
+    const foot = mesh(
+      new THREE.SphereGeometry(1, 7, 4),
+      "#4b4840",
+      root,
+      side * 0.15,
+      0.205,
+      z - 0.03,
+    );
+    foot.name = side < 0 ? "Left planted foot" : "Right planted foot";
+    foot.scale.set(0.08, 0.035, 0.13);
+  }
   // The hips stay planted while the upper body reaches into each paddle stroke.
   const torso = new THREE.Group();
   torso.name = "Rowing torso";
@@ -853,6 +884,7 @@ export function makeTraveller(scene) {
   );
   body.rotation.x = -0.22;
   const head = new THREE.Group();
+  head.name = "Rowing head";
   head.position.set(0, 0.455, -0.08);
   torso.add(head);
   mesh(new THREE.IcosahedronGeometry(0.133, 1), skin, head);
@@ -869,7 +901,7 @@ export function makeTraveller(scene) {
   shaft.name = "Paddle shaft";
   const paddle = mesh(new THREE.SphereGeometry(1, 6, 3), "#d1b477", root);
   paddle.name = "Paddle blade";
-  paddle.scale.set(0.13, 0.3, 0.035);
+  paddle.scale.set(0.11, 0.23, 0.028);
   const scarf = leaf(torso, 0.08, 0.28, 0.41, 0.43, "#729b8d", 0.2);
   scarf.rotation.z = -0.25;
   const arms = [-1, 1].map((side) => ({
@@ -878,13 +910,20 @@ export function makeTraveller(scene) {
     lower: stem(root, [0, 0, 0], [0, 1, 0], 0.033, skin),
     hand: mesh(new THREE.IcosahedronGeometry(0.044, 1), skin, root),
   }));
+  for (const arm of arms) {
+    const side = arm.side < 0 ? "Left" : "Right";
+    arm.upper.name = `${side} upper arm`;
+    arm.lower.name = `${side} forearm`;
+    arm.hand.name = `${side} hand`;
+  }
   const up = new THREE.Vector3(0, 1, 0),
     direction = new THREE.Vector3(),
     grip = new THREE.Vector3(),
     tip = new THREE.Vector3(),
     shoulder = new THREE.Vector3(),
     elbow = new THREE.Vector3(),
-    hand = new THREE.Vector3();
+    hand = new THREE.Vector3(),
+    feather = new THREE.Quaternion();
   function segment(object, a, b) {
     direction.subVectors(b, a);
     object.position.copy(a).add(b).multiplyScalar(0.5);
@@ -911,18 +950,9 @@ export function makeTraveller(scene) {
       const velocity = boat && rowing ? Math.hypot(boat.vx, boat.vz) : 0;
       speed += (velocity - speed) * (1 - Math.exp(-dt * 5));
       const effort = THREE.MathUtils.smoothstep(speed, 0.08, 1.4);
-      phase += dt * (2.7 + Math.min(speed, 3) * 0.65);
+      phase += dt * Math.PI * 2 * (0.44 + Math.min(speed, 3) * 0.075);
       const cycle = (phase / (Math.PI * 2)) % 1;
-      // A longer submerged pull followed by a quicker lifted recovery.
-      const pulling = cycle < 0.61;
-      const travel = pulling ? cycle / 0.61 : (cycle - 0.61) / 0.39;
-      const eased = travel * travel * (3 - 2 * travel);
-      const reach = pulling
-        ? THREE.MathUtils.lerp(-0.85, 0.95, eased)
-        : THREE.MathUtils.lerp(0.95, -0.85, eased);
-      const lift = pulling
-        ? -0.095
-        : -0.095 + Math.sin(travel * Math.PI) * 0.62;
+      const stroke = paddlePose(cycle, effort, tip, grip);
       root.position.x = boat ? boat.x : -0.5 + Math.sin(t * 0.25) * 0.16;
       if (boat) {
         root.position.z = boat.z;
@@ -946,12 +976,12 @@ export function makeTraveller(scene) {
         Math.cos(phase) * 0.024 * effort;
       root.rotation.z =
         Math.sin(t * 1.4) * 0.026 +
-        Math.sin(phase - 0.4) * 0.045 * effort -
+        Math.sin(phase - 0.4) * 0.018 * effort -
         turn * speed * 0.018;
       torso.rotation.set(
-        -reach * 0.22 * effort + Math.sin(t * 1.5) * 0.025,
-        -0.12 * effort + reach * 0.12 * effort,
-        -0.035 * effort,
+        stroke.lean + Math.sin(t * 1.5) * 0.009,
+        -0.08 * effort,
+        -0.02 * effort,
       );
       head.rotation.set(
         -torso.rotation.x * 0.35,
@@ -960,29 +990,20 @@ export function makeTraveller(scene) {
       );
       scarf.rotation.y = 0.2 + Math.sin(t * 3.2 - 0.6) * (0.17 + effort * 0.14);
       scarf.rotation.x = Math.sin(t * 2.6) * 0.13 + effort * 0.18;
-      tip.set(
-        0.67 + (pulling ? 0 : Math.sin(travel * Math.PI) * 0.18) * effort,
-        THREE.MathUtils.lerp(0.24, lift, effort),
-        THREE.MathUtils.lerp(0.72, reach, effort),
-      );
-      grip.set(
-        0.08 + effort * 0.1,
-        1.04 + Math.sin(phase) * 0.06 * effort,
-        0.19 + reach * 0.19 * effort,
-      );
       segment(shaft, grip, tip);
       paddle.position.copy(tip);
-      paddle.quaternion.copy(shaft.quaternion);
+      paddle.quaternion
+        .copy(shaft.quaternion)
+        .multiply(feather.setFromAxisAngle(up, stroke.feather));
       for (const arm of arms) {
         shoulder
-          .set(arm.side * 0.13, 0.29, 0)
+          .set(arm.side * 0.13, 0.29, -0.05)
           .applyEuler(torso.rotation)
           .add(torso.position);
-        hand.copy(grip).lerp(tip, arm.side < 0 ? 0 : 0.34);
-        elbow.copy(shoulder).add(hand).multiplyScalar(0.5);
-        elbow.x += arm.side * 0.13;
-        elbow.y -= 0.12;
-        elbow.z += 0.07;
+        hand
+          .copy(grip)
+          .lerp(tip, arm.side < 0 ? 0 : HAND_SPACING / PADDLE_LENGTH);
+        solveElbow(shoulder, hand, arm.side, elbow);
         segment(arm.upper, shoulder, elbow);
         segment(arm.lower, elbow, hand);
         arm.hand.position.copy(hand);
@@ -1008,7 +1029,7 @@ export function makeTraveller(scene) {
       sail.geometry.computeVertexNormals();
       root.updateMatrixWorld(true);
       motion.paddle.copy(tip).applyMatrix4(root.matrixWorld);
-      motion.wet = pulling ? effort * Math.sin(travel * Math.PI) : 0;
+      motion.wet = stroke.wet;
       motion.speed = speed;
     },
   };
